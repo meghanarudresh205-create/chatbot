@@ -1,2 +1,2 @@
 # chatbot
-it will guide students for there  mental health condition 
+it will guide students for their  mental health condition 
