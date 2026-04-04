@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: whiteboard-backend
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn backend_whiteboard:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true        # Render auto-generates a secure random value
+      - key: PYTHON_VERSION
+        value: 3.11.0
+    healthCheckPath: /health

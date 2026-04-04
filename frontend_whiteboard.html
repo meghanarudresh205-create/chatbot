@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>CanvasCollab — Collaborative Whiteboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --bg:#0a0a0f;--surface:#111118;--surface2:#1a1a24;--surface3:#222233;
+  --border:#2a2a3a;--accent:#6c63ff;--accent2:#ff6584;--accent3:#43e0c4;
+  --text:#e8e8f0;--text2:#9090a8;--text3:#606078;
+  --danger:#ff4466;--success:#43e0a4;--canvas-bg:#0d0d15;
+  --font:'Space Grotesk',sans-serif;--mono:'JetBrains Mono',monospace;
+  --radius:10px;--shadow:0 8px 32px rgba(0,0,0,.6);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;font-family:var(--font);background:var(--bg);color:var(--text)}
+button{font-family:var(--font);cursor:pointer;border:none;outline:none}
+input,textarea,select{font-family:var(--font);outline:none}
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:var(--surface)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* ── SERVER CONFIG BANNER ── */
+#config-banner{
+  position:fixed;top:0;left:0;right:0;z-index:9999;
+  background:linear-gradient(90deg,#1a1020,#1a1a2e);
+  border-bottom:1px solid #3a2a4a;padding:10px 20px;
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+}
+#config-banner label{font-size:12px;color:#a090c0;font-weight:600;letter-spacing:.5px;white-space:nowrap}
+#render-url-input{
+  flex:1;min-width:260px;padding:7px 12px;
+  background:#0e0e1a;border:1px solid #3a2a5a;border-radius:8px;
+  color:#e0d0ff;font-size:13px;font-family:var(--mono);
+}
+#render-url-input:focus{border-color:var(--accent)}
+#save-url-btn{
+  padding:7px 16px;background:var(--accent);color:#fff;
+  border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;
+}
+#save-url-btn:hover{background:#7a72ff}
+#url-status{font-size:11px;color:#70c080;font-family:var(--mono)}
+
+/* ── AUTH ── */
+#auth-screen{
+  display:flex;align-items:center;justify-content:center;
+  height:100vh;padding-top:52px;
+  background:var(--bg);
+  background-image:radial-gradient(ellipse at 20% 50%,rgba(108,99,255,.12) 0%,transparent 60%),
+                   radial-gradient(ellipse at 80% 20%,rgba(255,101,132,.08) 0%,transparent 50%);
+}
+.auth-panel{width:440px;background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:40px;box-shadow:var(--shadow)}
+.auth-logo{font-size:22px;font-weight:700;color:var(--text);margin-bottom:28px;display:flex;align-items:center;gap:10px}
+.auth-logo em{color:var(--accent);font-style:normal}
+.auth-tabs{display:flex;gap:4px;background:var(--surface2);border-radius:8px;padding:4px;margin-bottom:28px}
+.auth-tab{flex:1;padding:8px;border-radius:6px;background:transparent;color:var(--text2);font-weight:500;font-size:14px;transition:all .2s}
+.auth-tab.active{background:var(--surface3);color:var(--text)}
+.field{margin-bottom:16px}
+.field label{display:block;font-size:12px;color:var(--text2);margin-bottom:6px;font-weight:500;letter-spacing:.5px;text-transform:uppercase}
+.field input,.field select{width:100%;padding:11px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:14px;transition:border-color .2s}
+.field input:focus,.field select:focus{border-color:var(--accent)}
+.btn-primary{width:100%;padding:13px;background:var(--accent);color:#fff;font-weight:600;font-size:15px;border-radius:var(--radius);transition:all .2s;margin-top:8px}
+.btn-primary:hover{background:#7a72ff;transform:translateY(-1px)}
+.auth-msg{font-size:13px;color:var(--text2);text-align:center;margin-top:16px}
+.auth-msg a{color:var(--accent);cursor:pointer}
+.error-msg{color:var(--danger);font-size:13px;text-align:center;margin-top:10px;min-height:20px}
+
+/* ── DASHBOARD ── */
+#dashboard{display:none;flex-direction:column;height:100vh;padding-top:52px}
+.topbar{display:flex;align-items:center;gap:16px;padding:0 24px;height:60px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0}
+.topbar-logo{font-size:18px;font-weight:700;color:var(--text)}
+.topbar-logo em{color:var(--accent);font-style:normal}
+.topbar-spacer{flex:1}
+.user-badge{display:flex;align-items:center;gap:8px;padding:6px 12px;background:var(--surface2);border-radius:8px;font-size:13px;color:var(--text2)}
+.user-dot{width:8px;height:8px;border-radius:50%;background:var(--success)}
+.btn-sm{padding:7px 14px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);font-size:13px;font-weight:500;border-radius:8px;cursor:pointer;transition:all .2s}
+.btn-sm:hover{border-color:var(--accent);color:var(--text)}
+.btn-accent{padding:8px 16px;background:var(--accent);color:#fff;font-size:13px;font-weight:600;border-radius:8px;cursor:pointer;transition:all .2s}
+.btn-accent:hover{background:#7a72ff}
+.dash-body{flex:1;overflow-y:auto;padding:32px}
+.dash-header{margin-bottom:28px}
+.dash-title{font-size:26px;font-weight:700}
+.dash-sub{font-size:14px;color:var(--text2);margin-top:4px}
+.boards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:18px}
+.board-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px;cursor:pointer;transition:all .2s;position:relative;overflow:hidden}
+.board-card::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,var(--accent) 0%,transparent 60%);opacity:0;transition:opacity .2s}
+.board-card:hover{border-color:var(--accent);transform:translateY(-2px);box-shadow:0 12px 40px rgba(108,99,255,.2)}
+.board-card:hover::before{opacity:.04}
+.board-card-title{font-size:16px;font-weight:600;color:var(--text);margin-bottom:8px}
+.board-card-meta{font-size:12px;color:var(--text3);font-family:var(--mono)}
+.board-card-badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;margin-top:12px}
+.badge-owner{background:rgba(108,99,255,.15);color:var(--accent)}
+.badge-edit{background:rgba(67,224,196,.15);color:var(--accent3)}
+.badge-public{background:rgba(255,101,132,.15);color:var(--accent2)}
+.board-card-delete{position:absolute;top:14px;right:14px;width:26px;height:26px;border-radius:6px;background:transparent;border:none;color:var(--text3);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;font-size:14px}
+.board-card-delete:hover{background:var(--danger);color:#fff}
+.add-board-card{background:transparent;border:2px dashed var(--border);border-radius:14px;padding:22px;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:10px;color:var(--text3);font-size:14px;min-height:120px}
+.add-board-card:hover{border-color:var(--accent);color:var(--accent)}
+
+/* ── MODAL ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:32px;width:400px;box-shadow:var(--shadow);animation:popIn .2s ease}
+@keyframes popIn{from{transform:scale(.95);opacity:0}to{transform:scale(1);opacity:1}}
+.modal-title{font-size:18px;font-weight:600;margin-bottom:20px}
+.modal-actions{display:flex;gap:10px;margin-top:20px;justify-content:flex-end}
+.btn-ghost{padding:8px 16px;background:transparent;border:1px solid var(--border);color:var(--text2);border-radius:8px;font-size:13px;cursor:pointer;transition:all .2s}
+.btn-ghost:hover{border-color:var(--text2)}
+
+/* ── WHITEBOARD ── */
+#whiteboard{display:none;flex-direction:column;height:100vh;padding-top:52px}
+.wb-topbar{display:flex;align-items:center;gap:12px;padding:0 16px;height:56px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;z-index:10}
+.wb-back{width:32px;height:32px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;font-size:16px}
+.wb-back:hover{color:var(--text);border-color:var(--accent)}
+.wb-title{font-size:15px;font-weight:600}
+.wb-spacer{flex:1}
+.presence-dot{width:28px;height:28px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;border:2px solid var(--surface);margin-left:-6px;transition:transform .2s;cursor:default}
+.presence-dot:hover{transform:scale(1.2);z-index:1}
+.online-count{font-size:12px;color:var(--text3);margin-left:8px}
+
+/* ── TOOLBAR ── */
+.wb-toolbar{position:absolute;left:16px;top:50%;transform:translateY(-50%);background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:8px;display:flex;flex-direction:column;gap:4px;z-index:10;box-shadow:var(--shadow)}
+.tool-btn{width:38px;height:38px;border-radius:9px;background:transparent;border:none;color:var(--text2);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;transition:all .15s}
+.tool-btn:hover{background:var(--surface2);color:var(--text)}
+.tool-btn.active{background:var(--accent);color:#fff}
+.tool-sep{height:1px;background:var(--border);margin:4px 0}
+.tool-color{width:22px;height:22px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:border-color .15s}
+.tool-color.selected{border-color:white}
+.color-row{display:flex;gap:5px;flex-wrap:wrap;padding:4px 2px}
+
+/* ── CANVAS ── */
+.wb-canvas-area{flex:1;position:relative;overflow:hidden;background:var(--canvas-bg);background-image:radial-gradient(circle,#1a1a2e 1px,transparent 1px);background-size:28px 28px}
+#main-canvas{position:absolute;top:0;left:0;cursor:crosshair;touch-action:none}
+
+/* ── PROPS PANEL ── */
+.props-panel{position:absolute;right:16px;top:16px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;width:200px;z-index:10;box-shadow:var(--shadow);display:none}
+.props-panel.open{display:block}
+.props-title{font-size:12px;font-weight:600;color:var(--text2);letter-spacing:.5px;text-transform:uppercase;margin-bottom:12px}
+.prop-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.prop-label{font-size:12px;color:var(--text2)}
+.prop-input{width:80px;padding:4px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;font-family:var(--mono)}
+.prop-btn{width:100%;padding:8px;background:var(--danger);color:#fff;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;margin-top:8px;transition:opacity .2s}
+.prop-btn:hover{opacity:.85}
+
+/* ── CHAT ── */
+.chat-panel{position:absolute;right:16px;bottom:16px;width:280px;background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);display:flex;flex-direction:column;max-height:360px;z-index:10;transition:all .2s}
+.chat-panel.collapsed{max-height:44px;overflow:hidden}
+.chat-header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;flex-shrink:0}
+.chat-header-title{font-size:13px;font-weight:600}
+.chat-toggle{color:var(--text3);font-size:12px}
+.chat-messages{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px;min-height:0}
+.chat-msg{font-size:12px}
+.chat-msg-name{color:var(--accent);font-weight:600;margin-bottom:2px}
+.chat-msg-text{color:var(--text2);line-height:1.4}
+.chat-msg-time{color:var(--text3);font-size:10px;font-family:var(--mono)}
+.chat-input-row{display:flex;gap:6px;padding:10px;border-top:1px solid var(--border);flex-shrink:0}
+.chat-input{flex:1;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px}
+.chat-input:focus{border-color:var(--accent)}
+.chat-send{width:32px;height:32px;border-radius:7px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px}
+.chat-send:hover{opacity:.85}
+
+/* ── STATUS ── */
+.ws-status{position:absolute;bottom:16px;left:80px;font-size:11px;color:var(--text3);font-family:var(--mono);display:flex;align-items:center;gap:6px}
+.ws-dot{width:6px;height:6px;border-radius:50%;background:var(--success)}
+.ws-dot.off{background:var(--danger)}
+
+/* Cursor labels */
+.cursor-label{position:absolute;pointer-events:none;z-index:20;font-size:11px;font-weight:600;padding:2px 6px;background:var(--accent);color:#fff;border-radius:4px;white-space:nowrap}
+
+/* Notifications */
+.notif-stack{position:fixed;top:72px;right:20px;z-index:2000;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.notif{padding:10px 16px;background:var(--surface);border:1px solid var(--border);border-radius:10px;font-size:13px;color:var(--text);box-shadow:var(--shadow);animation:slideIn .3s ease;min-width:220px}
+.notif.join{border-left:3px solid var(--success)}
+.notif.leave{border-left:3px solid var(--text3)}
+.notif.chat{border-left:3px solid var(--accent)}
+@keyframes slideIn{from{transform:translateX(40px);opacity:0}to{transform:translateX(0);opacity:1}}
+</style>
+</head>
+<body>
+
+<!-- ═══ SERVER CONFIG BANNER ═══════════════════════════════════════════════ -->
+<div id="config-banner">
+  <label>🔗 BACKEND URL</label>
+  <input id="render-url-input" type="url" placeholder="https://whiteboard-backend.onrender.com" />
+  <button id="save-url-btn" onclick="saveRenderUrl()">Connect</button>
+  <span id="url-status"></span>
+</div>
+
+<!-- ═══ AUTH ══════════════════════════════════════════════════════════════ -->
+<div id="auth-screen">
+  <div class="auth-panel">
+    <div class="auth-logo">⬡ Canvas<em>Collab</em></div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" onclick="switchAuthTab('login')">Sign In</button>
+      <button class="auth-tab" onclick="switchAuthTab('register')">Register Org</button>
+    </div>
+    <div id="tab-login">
+      <div class="field"><label>Email</label><input id="login-email" type="email" placeholder="admin@company.com"/></div>
+      <div class="field"><label>Password</label><input id="login-pw" type="password" placeholder="••••••••"/></div>
+      <button class="btn-primary" onclick="doLogin()">Sign In</button>
+      <p class="auth-msg">No account? <a onclick="switchAuthTab('register')">Register your org →</a></p>
+    </div>
+    <div id="tab-register" style="display:none">
+      <div class="field"><label>Organization Name</label><input id="reg-org" placeholder="Acme Inc"/></div>
+      <div class="field"><label>Admin Email</label><input id="reg-email" type="email" placeholder="admin@acme.com"/></div>
+      <div class="field"><label>Password</label><input id="reg-pw" type="password" placeholder="••••••••"/></div>
+      <button class="btn-primary" onclick="doRegister()">Create Organization</button>
+    </div>
+    <p class="error-msg" id="auth-error"></p>
+  </div>
+</div>
+
+<!-- ═══ DASHBOARD ══════════════════════════════════════════════════════════ -->
+<div id="dashboard">
+  <div class="topbar">
+    <div class="topbar-logo">⬡ Canvas<em>Collab</em></div>
+    <div class="topbar-spacer"></div>
+    <div class="user-badge"><div class="user-dot"></div><span id="dash-user-email"></span></div>
+    <button class="btn-sm" onclick="showInviteModal()">+ Invite</button>
+    <button class="btn-sm" onclick="doLogout()">Sign Out</button>
+  </div>
+  <div class="dash-body">
+    <div class="dash-header">
+      <div class="dash-title">My Whiteboards</div>
+      <div class="dash-sub" id="dash-tenant-name"></div>
+    </div>
+    <div class="boards-grid" id="boards-grid">
+      <div class="add-board-card" onclick="showCreateBoardModal()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        New Whiteboard
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ WHITEBOARD ══════════════════════════════════════════════════════════ -->
+<div id="whiteboard">
+  <div class="wb-topbar">
+    <button class="wb-back" onclick="backToDashboard()">←</button>
+    <div class="wb-title" id="wb-board-title">Untitled Board</div>
+    <div class="wb-spacer"></div>
+    <div style="display:flex" id="presence-avatars"></div>
+    <div class="online-count" id="online-count"></div>
+    <div class="ws-status" id="ws-status-bar">
+      <div class="ws-dot off" id="ws-dot"></div>
+      <span id="ws-status-text">Disconnected</span>
+    </div>
+  </div>
+  <div class="wb-canvas-area" id="canvas-area">
+    <canvas id="main-canvas"></canvas>
+    <div class="wb-toolbar">
+      <button class="tool-btn active" data-tool="select" onclick="setTool('select')" title="Select (V)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M4 0l16 12-7 1-4 8z"/></svg>
+      </button>
+      <button class="tool-btn" data-tool="freehand" onclick="setTool('freehand')" title="Draw (D)">✏️</button>
+      <button class="tool-btn" data-tool="rect" onclick="setTool('rect')" title="Rectangle (R)">▭</button>
+      <button class="tool-btn" data-tool="circle" onclick="setTool('circle')" title="Circle (C)">○</button>
+      <button class="tool-btn" data-tool="line" onclick="setTool('line')" title="Line (L)">╱</button>
+      <button class="tool-btn" data-tool="text" onclick="setTool('text')" title="Text (T)">T</button>
+      <button class="tool-btn" data-tool="sticky" onclick="setTool('sticky')" title="Sticky (S)">🗒</button>
+      <button class="tool-btn" data-tool="eraser" onclick="setTool('eraser')" title="Eraser (E)">◻</button>
+      <div class="tool-sep"></div>
+      <div class="color-row">
+        <div class="tool-color selected" style="background:#e8e8f0" data-color="#e8e8f0" onclick="setColor(this)"></div>
+        <div class="tool-color" style="background:#6c63ff" data-color="#6c63ff" onclick="setColor(this)"></div>
+        <div class="tool-color" style="background:#ff6584" data-color="#ff6584" onclick="setColor(this)"></div>
+        <div class="tool-color" style="background:#43e0c4" data-color="#43e0c4" onclick="setColor(this)"></div>
+        <div class="tool-color" style="background:#ffd166" data-color="#ffd166" onclick="setColor(this)"></div>
+        <div class="tool-color" style="background:#ff6b35" data-color="#ff6b35" onclick="setColor(this)"></div>
+      </div>
+      <div class="tool-sep"></div>
+      <button class="tool-btn" onclick="undo()" title="Undo (Ctrl+Z)">↩</button>
+      <button class="tool-btn" onclick="clearBoard()" title="Clear All">🗑</button>
+      <button class="tool-btn" onclick="exportPNG()" title="Export PNG">⬇</button>
+    </div>
+    <div class="props-panel" id="props-panel">
+      <div class="props-title">Properties</div>
+      <div class="prop-row"><span class="prop-label">X</span><input class="prop-input" id="prop-x" type="number" onchange="updateSelectedProp()"/></div>
+      <div class="prop-row"><span class="prop-label">Y</span><input class="prop-input" id="prop-y" type="number" onchange="updateSelectedProp()"/></div>
+      <div class="prop-row"><span class="prop-label">W</span><input class="prop-input" id="prop-w" type="number" onchange="updateSelectedProp()"/></div>
+      <div class="prop-row"><span class="prop-label">H</span><input class="prop-input" id="prop-h" type="number" onchange="updateSelectedProp()"/></div>
+      <button class="prop-btn" onclick="deleteSelected()">Delete</button>
+    </div>
+    <div class="chat-panel" id="chat-panel">
+      <div class="chat-header" onclick="toggleChat()">
+        <div class="chat-header-title">💬 Team Chat</div>
+        <div class="chat-toggle" id="chat-toggle">▲</div>
+      </div>
+      <div class="chat-messages" id="chat-messages"></div>
+      <div class="chat-input-row">
+        <input class="chat-input" id="chat-input" placeholder="Message…" onkeydown="if(event.key==='Enter')sendChat()"/>
+        <button class="chat-send" onclick="sendChat()">→</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODALS ══════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="create-board-modal">
+  <div class="modal">
+    <div class="modal-title">New Whiteboard</div>
+    <div class="field"><label>Title</label><input id="new-board-title" placeholder="Sprint Planning…"/></div>
+    <div class="field">
+      <label>Visibility</label>
+      <select id="new-board-public">
+        <option value="0">Private (team only)</option>
+        <option value="1">Public (anyone with link)</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeModal('create-board-modal')">Cancel</button>
+      <button class="btn-accent" onclick="createBoard()">Create Board</button>
+    </div>
+  </div>
+</div>
+<div class="modal-overlay" id="invite-modal">
+  <div class="modal">
+    <div class="modal-title">Invite Team Member</div>
+    <div class="field"><label>Email</label><input id="invite-email" placeholder="colleague@company.com"/></div>
+    <div class="field"><label>Password</label><input id="invite-pw" type="password" placeholder="Temporary password"/></div>
+    <div class="field">
+      <label>Role</label>
+      <select id="invite-role">
+        <option value="member">Member</option>
+        <option value="admin">Admin</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeModal('invite-modal')">Cancel</button>
+      <button class="btn-accent" onclick="inviteUser()">Send Invite</button>
+    </div>
+  </div>
+</div>
+
+<div class="notif-stack" id="notif-stack"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+// SERVER CONFIG — reads/writes localStorage
+// ═══════════════════════════════════════════════════════════════════
+let BASE_URL = localStorage.getItem('render_base_url') || '';
+let WS_URL   = '';
+
+function deriveWsUrl(base) {
+  if (!base) return '';
+  return base.replace(/^https?/, m => m === 'https' ? 'wss' : 'ws');
+}
+
+function saveRenderUrl() {
+  let url = document.getElementById('render-url-input').value.trim().replace(/\/$/, '');
+  if (!url) return;
+  BASE_URL = url;
+  WS_URL   = deriveWsUrl(url);
+  localStorage.setItem('render_base_url', BASE_URL);
+  document.getElementById('url-status').textContent = '✓ Connected to ' + BASE_URL;
+  // Quick health check
+  fetch(BASE_URL + '/health').then(r => r.json()).then(d => {
+    document.getElementById('url-status').textContent = '✅ Backend live: ' + d.time;
+  }).catch(() => {
+    document.getElementById('url-status').textContent = '⚠️ Could not reach backend';
+    document.getElementById('url-status').style.color = '#ff6584';
+  });
+}
+
+// Restore saved URL on load
+(function restoreUrl() {
+  const saved = localStorage.getItem('render_base_url');
+  if (saved) {
+    document.getElementById('render-url-input').value = saved;
+    BASE_URL = saved;
+    WS_URL   = deriveWsUrl(saved);
+    document.getElementById('url-status').textContent = '✓ ' + saved;
+  }
+})();
+
+// ═══════════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════════
+let token=null,userId=null,tenantId=null,userRole=null,userEmail=null;
+let currentBoardId=null,currentBoardTitle='';
+let ws=null,wsReconnectTimer=null;
+let canvas,ctx;
+let elements=[],undoStack=[],selectedId=null;
+let activeTool='select',activeColor='#e8e8f0';
+let drawing=false,startX=0,startY=0,freehandPoints=[];
+let viewOffsetX=0,viewOffsetY=0,scale=1;
+let isDragging=false,dragStartX=0,dragStartY=0,panStartOffX=0,panStartOffY=0;
+let selectedOffset=null;
+let remoteCursors={},onlineUsers={};
+
+// ═══════════════════════════════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════════════════════════════
+const $=id=>document.getElementById(id);
+const show=id=>{$(id).style.display='flex'};
+const hide=id=>{$(id).style.display='none'};
+
+async function api(method,path,body){
+  if(!BASE_URL){alert('Please enter your Render backend URL at the top first.');throw new Error('No backend URL');}
+  const res=await fetch(BASE_URL+path,{
+    method,headers:{'Content-Type':'application/json',...(token?{'Authorization':`Bearer ${token}`}:{})},
+    body:body?JSON.stringify(body):undefined
+  });
+  if(!res.ok){const e=await res.json().catch(()=>({detail:res.statusText}));throw new Error(e.detail||'Request failed');}
+  return res.status===204?null:res.json();
+}
+
+function notify(msg,type='join'){
+  const d=document.createElement('div');d.className=`notif ${type}`;d.textContent=msg;
+  $('notif-stack').appendChild(d);setTimeout(()=>d.remove(),3500);
+}
+function canvasToWorld(cx,cy){return{x:(cx-viewOffsetX)/scale,y:(cy-viewOffsetY)/scale}}
+function worldToCanvas(wx,wy){return{x:wx*scale+viewOffsetX,y:wy*scale+viewOffsetY}}
+function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+
+// ═══════════════════════════════════════════════════════════════════
+// AUTH
+// ═══════════════════════════════════════════════════════════════════
+function switchAuthTab(tab){
+  document.querySelectorAll('.auth-tab').forEach((b,i)=>b.classList.toggle('active',(i===0&&tab==='login')||(i===1&&tab==='register')));
+  $('tab-login').style.display=tab==='login'?'':'none';
+  $('tab-register').style.display=tab==='register'?'':'none';
+}
+
+async function doLogin(){
+  const email=$('login-email').value.trim(),pw=$('login-pw').value;
+  $('auth-error').textContent='';
+  try{
+    const fd=new URLSearchParams({username:email,password:pw});
+    const res=await fetch(BASE_URL+'/auth/token',{method:'POST',body:fd});
+    if(!res.ok)throw new Error('Invalid credentials');
+    const data=await res.json();
+    token=data.access_token;userId=data.user_id;tenantId=data.tenant_id;userRole=data.role;userEmail=email;
+    localStorage.setItem('wb_token',token);
+    goToDashboard();
+  }catch(e){$('auth-error').textContent=e.message;}
+}
+
+async function doRegister(){
+  $('auth-error').textContent='';
+  try{
+    await api('POST','/tenants',{name:$('reg-org').value.trim(),admin_email:$('reg-email').value.trim(),admin_password:$('reg-pw').value});
+    notify('Organization created! Please sign in.','join');
+    switchAuthTab('login');$('login-email').value=$('reg-email').value;
+  }catch(e){$('auth-error').textContent=e.message;}
+}
+
+function doLogout(){token=null;localStorage.removeItem('wb_token');hide('dashboard');show('auth-screen');}
+
+// ═══════════════════════════════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════════════════════════════
+async function goToDashboard(){
+  hide('auth-screen');hide('whiteboard');show('dashboard');$('dashboard').style.flexDirection='column';
+  try{
+    const me=await api('GET','/auth/me');
+    userEmail=me.email;userRole=me.role;tenantId=me.tenant_id;userId=me.id;
+    $('dash-user-email').textContent=userEmail;
+    const t=await api('GET',`/tenants/${tenantId}`);
+    $('dash-tenant-name').textContent=`Organization: ${t.name} · Plan: ${t.plan}`;
+  }catch(e){}
+  loadBoards();
+}
+
+async function loadBoards(){
+  const grid=$('boards-grid');
+  grid.innerHTML=`<div class="add-board-card" onclick="showCreateBoardModal()">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    New Whiteboard</div>`;
+  try{
+    const boards=await api('GET','/boards');
+    boards.forEach(b=>{
+      const card=document.createElement('div');card.className='board-card';
+      card.innerHTML=`<div class="board-card-title">${escHtml(b.title)}</div>
+        <div class="board-card-meta">${(b.updated_at||'').slice(0,16).replace('T',' ')} UTC</div>
+        <span class="board-card-badge badge-${b.permission==='owner'?'owner':'edit'}">${b.permission}</span>
+        ${b.is_public?'<span class="board-card-badge badge-public" style="margin-left:6px">Public</span>':''}
+        ${b.permission==='owner'?`<button class="board-card-delete" onclick="deleteBoard('${b.id}',event)">✕</button>`:''}`;
+      card.addEventListener('click',()=>openBoard(b.id,b.title));
+      grid.appendChild(card);
+    });
+  }catch(e){notify('Failed to load boards: '+e.message,'leave');}
+}
+
+function showCreateBoardModal(){$('create-board-modal').classList.add('open');$('new-board-title').focus();}
+function showInviteModal(){$('invite-modal').classList.add('open');$('invite-email').focus();}
+function closeModal(id){$(id).classList.remove('open');}
+
+async function createBoard(){
+  const title=$('new-board-title').value.trim()||'Untitled';
+  const isPublic=$('new-board-public').value==='1';
+  try{await api('POST','/boards',{title,is_public:isPublic});closeModal('create-board-modal');$('new-board-title').value='';loadBoards();}
+  catch(e){notify(e.message,'leave');}
+}
+
+async function deleteBoard(id,evt){
+  evt.stopPropagation();if(!confirm('Delete this board?'))return;
+  try{await api('DELETE',`/boards/${id}`);loadBoards();}catch(e){notify(e.message,'leave');}
+}
+
+async function inviteUser(){
+  try{
+    await api('POST',`/tenants/${tenantId}/users`,{email:$('invite-email').value.trim(),password:$('invite-pw').value,role:$('invite-role').value});
+    notify('User invited!','join');closeModal('invite-modal');
+  }catch(e){notify(e.message,'leave');}
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// WHITEBOARD OPEN / CLOSE
+// ═══════════════════════════════════════════════════════════════════
+async function openBoard(boardId,title){
+  currentBoardId=boardId;currentBoardTitle=title;
+  hide('dashboard');hide('auth-screen');show('whiteboard');$('whiteboard').style.flexDirection='column';
+  $('wb-board-title').textContent=title;
+  initCanvas();await loadBoardData(boardId);connectWS(boardId);
+}
+
+function backToDashboard(){
+  if(ws){ws.close();ws=null;}clearTimeout(wsReconnectTimer);
+  elements=[];selectedId=null;remoteCursors={};onlineUsers={};
+  $('presence-avatars').innerHTML='';$('chat-messages').innerHTML='';
+  hide('whiteboard');goToDashboard();
+}
+
+async function loadBoardData(boardId){
+  try{
+    const board=await api('GET',`/boards/${boardId}`);
+    elements=(board.elements||[]).map(e=>({id:e.id,type:e.type,data:e.data}));
+    redraw();
+  }catch(e){notify('Failed to load board: '+e.message,'leave');}
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CANVAS ENGINE
+// ═══════════════════════════════════════════════════════════════════
+function initCanvas(){
+  canvas=$('main-canvas');ctx=canvas.getContext('2d');
+  resizeCanvas();window.addEventListener('resize',resizeCanvas);
+  canvas.addEventListener('mousedown',onMouseDown);
+  canvas.addEventListener('mousemove',onMouseMove);
+  canvas.addEventListener('mouseup',onMouseUp);
+  canvas.addEventListener('wheel',onWheel,{passive:false});
+  window.addEventListener('keydown',onKeyDown);
+}
+function resizeCanvas(){canvas.width=$('canvas-area').offsetWidth;canvas.height=$('canvas-area').offsetHeight;redraw();}
+
+function redraw(){
+  if(!ctx)return;ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.save();ctx.translate(viewOffsetX,viewOffsetY);ctx.scale(scale,scale);
+  elements.forEach(el=>drawElement(el));
+  if(selectedId){const el=elements.find(e=>e.id===selectedId);if(el)drawSelection(el);}
+  ctx.restore();
+}
+
+function drawElement(el){
+  const d=el.data;ctx.save();
+  ctx.strokeStyle=d.color||'#e8e8f0';ctx.fillStyle=d.fill||'transparent';
+  ctx.lineWidth=(d.lineWidth||2)/scale;ctx.lineCap='round';ctx.lineJoin='round';
+  switch(el.type){
+    case 'rect':
+      ctx.beginPath();ctx.rect(d.x,d.y,d.w,d.h);
+      if(d.fill&&d.fill!=='transparent')ctx.fill();ctx.stroke();break;
+    case 'circle':
+      ctx.beginPath();ctx.ellipse(d.x+d.w/2,d.y+d.h/2,Math.abs(d.w/2),Math.abs(d.h/2),0,0,Math.PI*2);
+      if(d.fill&&d.fill!=='transparent')ctx.fill();ctx.stroke();break;
+    case 'line':
+      ctx.beginPath();ctx.moveTo(d.x1,d.y1);ctx.lineTo(d.x2,d.y2);ctx.stroke();break;
+    case 'freehand':
+      if(!d.points||d.points.length<2)break;
+      ctx.beginPath();ctx.moveTo(d.points[0].x,d.points[0].y);
+      d.points.forEach(p=>ctx.lineTo(p.x,p.y));ctx.stroke();break;
+    case 'text':
+      ctx.fillStyle=d.color||'#e8e8f0';ctx.font=`${d.fontSize||16}px 'Space Grotesk',sans-serif`;
+      ctx.fillText(d.text||'',d.x,d.y+(d.fontSize||16));break;
+    case 'sticky':
+      const sw=d.w||160,sh=d.h||120;
+      ctx.fillStyle=d.bg||'#ffd166';ctx.shadowColor='rgba(0,0,0,.3)';ctx.shadowBlur=8;
+      roundRect(ctx,d.x,d.y,sw,sh,6);ctx.fill();ctx.shadowBlur=0;
+      ctx.fillStyle='#111';ctx.font=`13px 'Space Grotesk',sans-serif`;
+      wrapText(ctx,d.text||'',d.x+10,d.y+20,sw-20,18);break;
+  }
+  ctx.restore();
+}
+
+function roundRect(c,x,y,w,h,r){
+  c.beginPath();c.moveTo(x+r,y);c.lineTo(x+w-r,y);c.arcTo(x+w,y,x+w,y+r,r);
+  c.lineTo(x+w,y+h-r);c.arcTo(x+w,y+h,x+w-r,y+h,r);c.lineTo(x+r,y+h);
+  c.arcTo(x,y+h,x,y+h-r,r);c.lineTo(x,y+r);c.arcTo(x,y,x+r,y,r);c.closePath();
+}
+function wrapText(c,text,x,y,maxW,lineH){
+  const words=text.split(' ');let line='';
+  for(const word of words){const test=line+word+' ';if(c.measureText(test).width>maxW&&line){c.fillText(line,x,y);line=word+' ';y+=lineH;}else line=test;}
+  if(line)c.fillText(line,x,y);
+}
+function drawSelection(el){
+  const b=getBounds(el);if(!b)return;ctx.save();
+  ctx.strokeStyle='#6c63ff';ctx.lineWidth=2/scale;ctx.setLineDash([6/scale,3/scale]);
+  ctx.strokeRect(b.x-6/scale,b.y-6/scale,b.w+12/scale,b.h+12/scale);
+  ctx.setLineDash([]);ctx.restore();
+}
+function getBounds(el){
+  const d=el.data;
+  switch(el.type){
+    case 'rect':case 'circle':case 'sticky':return{x:d.x,y:d.y,w:d.w||100,h:d.h||100};
+    case 'line':return{x:Math.min(d.x1,d.x2),y:Math.min(d.y1,d.y2),w:Math.abs(d.x2-d.x1)||4,h:Math.abs(d.y2-d.y1)||4};
+    case 'text':return{x:d.x,y:d.y,w:200,h:d.fontSize||20};
+    case 'freehand':{if(!d.points?.length)return null;const xs=d.points.map(p=>p.x),ys=d.points.map(p=>p.y);return{x:Math.min(...xs),y:Math.min(...ys),w:Math.max(...xs)-Math.min(...xs)||4,h:Math.max(...ys)-Math.min(...ys)||4};}
+  }return null;
+}
+function hitTest(el,wx,wy){const b=getBounds(el);if(!b)return false;return wx>=b.x-8&&wx<=b.x+b.w+8&&wy>=b.y-8&&wy<=b.y+b.h+8;}
+
+// ═══════════════════════════════════════════════════════════════════
+// MOUSE
+// ═══════════════════════════════════════════════════════════════════
+function getWorldPos(evt){const r=canvas.getBoundingClientRect();return canvasToWorld(evt.clientX-r.left,evt.clientY-r.top);}
+
+function onMouseDown(evt){
+  const w=getWorldPos(evt);
+  if(evt.button===1||(evt.button===0&&evt.altKey)){
+    isDragging=true;dragStartX=evt.clientX;dragStartY=evt.clientY;panStartOffX=viewOffsetX;panStartOffY=viewOffsetY;
+    canvas.style.cursor='grabbing';return;
+  }
+  startX=w.x;startY=w.y;drawing=true;
+  if(activeTool==='select'){
+    let found=null;
+    for(let i=elements.length-1;i>=0;i--){if(hitTest(elements[i],w.x,w.y)){found=elements[i];break;}}
+    selectedId=found?found.id:null;
+    if(found){const b=getBounds(found);selectedOffset={dx:w.x-b.x,dy:w.y-b.y};showProps(found);}
+    else{hideProps();isDragging=true;dragStartX=evt.clientX;dragStartY=evt.clientY;panStartOffX=viewOffsetX;panStartOffY=viewOffsetY;}
+    redraw();return;
+  }
+  if(activeTool==='freehand'){freehandPoints=[{x:w.x,y:w.y}];return;}
+  if(activeTool==='text'){const text=prompt('Enter text:');if(!text){drawing=false;return;}addElement({id:tmpId(),type:'text',data:{x:w.x,y:w.y,text,color:activeColor,fontSize:18}});drawing=false;return;}
+  if(activeTool==='sticky'){const text=prompt('Sticky note text:')||'';addElement({id:tmpId(),type:'sticky',data:{x:w.x,y:w.y,w:160,h:120,text,bg:'#ffd166'}});drawing=false;return;}
+}
+
+function onMouseMove(evt){
+  const w=getWorldPos(evt);
+  if(ws&&ws.readyState===1)ws.send(JSON.stringify({type:'cursor_move',x:w.x,y:w.y}));
+  if(isDragging){
+    viewOffsetX=panStartOffX+(evt.clientX-dragStartX);viewOffsetY=panStartOffY+(evt.clientY-dragStartY);redraw();return;
+  }
+  if(!drawing)return;
+  if(activeTool==='select'&&selectedId){
+    const el=elements.find(e=>e.id===selectedId);
+    if(el&&selectedOffset){const b=getBounds(el);moveElement(el,w.x-selectedOffset.dx-b.x,w.y-selectedOffset.dy-b.y);redraw();}return;
+  }
+  redraw();ctx.save();ctx.translate(viewOffsetX,viewOffsetY);ctx.scale(scale,scale);
+  ctx.strokeStyle=activeColor;ctx.lineWidth=2/scale;ctx.lineCap='round';
+  if(activeTool==='freehand'){freehandPoints.push({x:w.x,y:w.y});ctx.beginPath();ctx.moveTo(freehandPoints[0].x,freehandPoints[0].y);freehandPoints.forEach(p=>ctx.lineTo(p.x,p.y));ctx.stroke();}
+  else if(activeTool==='rect'){ctx.strokeRect(startX,startY,w.x-startX,w.y-startY);}
+  else if(activeTool==='circle'){ctx.beginPath();ctx.ellipse((startX+w.x)/2,(startY+w.y)/2,Math.abs(w.x-startX)/2,Math.abs(w.y-startY)/2,0,0,Math.PI*2);ctx.stroke();}
+  else if(activeTool==='line'){ctx.beginPath();ctx.moveTo(startX,startY);ctx.lineTo(w.x,w.y);ctx.stroke();}
+  ctx.restore();
+}
+
+function onMouseUp(evt){
+  if(isDragging){
+    isDragging=false;canvas.style.cursor=activeTool==='select'?'default':'crosshair';
+    if(activeTool==='select'&&selectedId){const el=elements.find(e=>e.id===selectedId);if(el)wsSend({type:'element_update',element_id:el.id,data:el.data});}
+    return;
+  }
+  if(!drawing)return;drawing=false;const w=getWorldPos(evt);
+  if(activeTool==='eraser'){for(let i=elements.length-1;i>=0;i--){if(hitTest(elements[i],w.x,w.y)){const eid=elements[i].id;elements.splice(i,1);wsSend({type:'element_delete',element_id:eid});redraw();return;}}return;}
+  let el=null;
+  if(activeTool==='freehand'&&freehandPoints.length>1){el={id:tmpId(),type:'freehand',data:{points:[...freehandPoints],color:activeColor,lineWidth:2}};freehandPoints=[];}
+  else if(activeTool==='rect')el={id:tmpId(),type:'rect',data:{x:Math.min(startX,w.x),y:Math.min(startY,w.y),w:Math.abs(w.x-startX)||4,h:Math.abs(w.y-startY)||4,color:activeColor,fill:'transparent',lineWidth:2}};
+  else if(activeTool==='circle')el={id:tmpId(),type:'circle',data:{x:Math.min(startX,w.x),y:Math.min(startY,w.y),w:Math.abs(w.x-startX)||4,h:Math.abs(w.y-startY)||4,color:activeColor,fill:'transparent',lineWidth:2}};
+  else if(activeTool==='line')el={id:tmpId(),type:'line',data:{x1:startX,y1:startY,x2:w.x,y2:w.y,color:activeColor,lineWidth:2}};
+  if(el)addElement(el);
+}
+
+function onWheel(evt){
+  evt.preventDefault();const r=canvas.getBoundingClientRect();const cx=evt.clientX-r.left,cy=evt.clientY-r.top;
+  const d=evt.deltaY<0?1.1:.91,ns=Math.min(5,Math.max(.1,scale*d));
+  viewOffsetX=cx-(cx-viewOffsetX)*(ns/scale);viewOffsetY=cy-(cy-viewOffsetY)*(ns/scale);scale=ns;redraw();
+}
+
+function onKeyDown(evt){
+  if(evt.target.tagName==='INPUT'||evt.target.tagName==='TEXTAREA')return;
+  const k=evt.key.toLowerCase();
+  if(k==='v')setTool('select');else if(k==='d')setTool('freehand');else if(k==='r')setTool('rect');
+  else if(k==='c')setTool('circle');else if(k==='l')setTool('line');else if(k==='t')setTool('text');
+  else if(k==='s')setTool('sticky');else if(k==='e')setTool('eraser');
+  else if(k==='delete'||k==='backspace')deleteSelected();
+  else if(evt.ctrlKey&&k==='z')undo();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ELEMENTS
+// ═══════════════════════════════════════════════════════════════════
+function tmpId(){return'tmp_'+Math.random().toString(36).slice(2);}
+function addElement(el){undoStack.push(JSON.stringify(elements));if(undoStack.length>50)undoStack.shift();elements.push(el);redraw();wsSend({type:'element_add',element_type:el.type,data:el.data});}
+function moveElement(el,dx,dy){const d=el.data;if('x'in d){d.x+=dx;d.y+=dy;}if('x1'in d){d.x1+=dx;d.y1+=dy;d.x2+=dx;d.y2+=dy;}if('points'in d)d.points=d.points.map(p=>({x:p.x+dx,y:p.y+dy}));}
+function deleteSelected(){if(!selectedId)return;const idx=elements.findIndex(e=>e.id===selectedId);if(idx===-1)return;undoStack.push(JSON.stringify(elements));const eid=elements[idx].id;elements.splice(idx,1);wsSend({type:'element_delete',element_id:eid});selectedId=null;hideProps();redraw();}
+function undo(){if(!undoStack.length)return;elements=JSON.parse(undoStack.pop());selectedId=null;hideProps();redraw();}
+function clearBoard(){if(!confirm('Clear all elements?'))return;undoStack.push(JSON.stringify(elements));const ids=elements.map(e=>e.id);elements=[];ids.forEach(id=>wsSend({type:'element_delete',element_id:id}));redraw();}
+function exportPNG(){const link=document.createElement('a');link.download=currentBoardTitle+'.png';link.href=canvas.toDataURL();link.click();}
+
+// ═══════════════════════════════════════════════════════════════════
+// TOOLS & PROPS
+// ═══════════════════════════════════════════════════════════════════
+function setTool(t){activeTool=t;document.querySelectorAll('.tool-btn').forEach(b=>b.classList.toggle('active',b.dataset.tool===t));canvas.style.cursor=t==='select'?'default':t==='eraser'?'cell':'crosshair';if(t!=='select'){selectedId=null;hideProps();redraw();}}
+function setColor(el){document.querySelectorAll('.tool-color').forEach(c=>c.classList.remove('selected'));el.classList.add('selected');activeColor=el.dataset.color;}
+function showProps(el){const b=getBounds(el);if(!b)return;$('prop-x').value=Math.round(b.x);$('prop-y').value=Math.round(b.y);$('prop-w').value=Math.round(b.w);$('prop-h').value=Math.round(b.h);$('props-panel').classList.add('open');}
+function hideProps(){$('props-panel').classList.remove('open');}
+function updateSelectedProp(){if(!selectedId)return;const el=elements.find(e=>e.id===selectedId);if(!el)return;const d=el.data;if('x'in d){d.x=+$('prop-x').value;d.y=+$('prop-y').value;}if('w'in d){d.w=+$('prop-w').value;d.h=+$('prop-h').value;}wsSend({type:'element_update',element_id:el.id,data:el.data});redraw();}
+
+// ═══════════════════════════════════════════════════════════════════
+// WEBSOCKET
+// ═══════════════════════════════════════════════════════════════════
+function connectWS(boardId){
+  const url=`${WS_URL}/ws/${boardId}?token=${token}`;
+  ws=new WebSocket(url);
+  ws.onopen=()=>{setWsStatus(true);clearTimeout(wsReconnectTimer);};
+  ws.onclose=()=>{setWsStatus(false);wsReconnectTimer=setTimeout(()=>{if(currentBoardId)connectWS(currentBoardId);},3000);};
+  ws.onerror=()=>setWsStatus(false);
+  ws.onmessage=({data})=>{let m;try{m=JSON.parse(data);}catch{return;}handleWsMsg(m);};
+}
+function wsSend(obj){if(ws&&ws.readyState===1)ws.send(JSON.stringify(obj));}
+function setWsStatus(connected){$('ws-dot').classList.toggle('off',!connected);$('ws-status-text').textContent=connected?'Live':'Reconnecting…';}
+
+function handleWsMsg(msg){
+  switch(msg.type){
+    case 'init_presence':
+      Object.entries(msg.users||{}).forEach(([uid,info])=>{if(uid!==userId)updateRemoteCursor(uid,info.x,info.y,info.email);});
+      updatePresenceBar(msg.online_count);break;
+    case 'user_joined':
+      onlineUsers[msg.user_id]=msg.email;notify(`${msg.email} joined`,'join');updatePresenceBar(msg.online_count);addPresenceDot(msg.user_id,msg.email);break;
+    case 'user_left':
+      delete onlineUsers[msg.user_id];removeRemoteCursor(msg.user_id);notify(`${msg.email} left`,'leave');updatePresenceBar(msg.online_count);removePresenceDot(msg.user_id);break;
+    case 'cursor_update':
+      if(msg.user_id!==userId)updateRemoteCursor(msg.user_id,msg.x,msg.y,msg.email);break;
+    case 'element_add':
+      if(!elements.find(e=>e.id===msg.element_id)){elements.push({id:msg.element_id,type:msg.element_type,data:msg.data});redraw();}break;
+    case 'element_update':
+      if(msg.updated_by!==userId){const el=elements.find(e=>e.id===msg.element_id);if(el){el.data=msg.data;redraw();}}break;
+    case 'element_delete':
+      const idx=elements.findIndex(e=>e.id===msg.element_id);if(idx!==-1){elements.splice(idx,1);if(selectedId===msg.element_id){selectedId=null;hideProps();}redraw();}break;
+    case 'chat':
+      appendChat(msg.email,msg.text,msg.ts);if(msg.user_id!==userId)notify(`💬 ${msg.email}: ${msg.text.slice(0,40)}`,'chat');break;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PRESENCE
+// ═══════════════════════════════════════════════════════════════════
+const CURSOR_COLORS=['#6c63ff','#ff6584','#43e0c4','#ffd166','#ff6b35'];
+let colorIdx=0;const userColorMap={};
+function getCursorColor(uid){if(!userColorMap[uid])userColorMap[uid]=CURSOR_COLORS[colorIdx++%CURSOR_COLORS.length];return userColorMap[uid];}
+
+function updateRemoteCursor(uid,wx,wy,email){
+  const cp=worldToCanvas(wx,wy);
+  if(!remoteCursors[uid]){const el=document.createElement('div');el.className='cursor-label';el.textContent=email?.split('@')[0]||uid.slice(0,6);el.style.background=getCursorColor(uid);$('canvas-area').appendChild(el);remoteCursors[uid]={el};}
+  const c=remoteCursors[uid];c.el.style.left=(cp.x+14)+'px';c.el.style.top=(cp.y-8)+'px';
+}
+function removeRemoteCursor(uid){if(remoteCursors[uid]){remoteCursors[uid].el.remove();delete remoteCursors[uid];}}
+function updatePresenceBar(count){$('online-count').textContent=count>1?`${count} online`:'';}
+function addPresenceDot(uid,email){if(document.getElementById('pdot-'+uid))return;const el=document.createElement('div');el.className='presence-dot';el.id='pdot-'+uid;el.style.background=getCursorColor(uid);el.title=email;el.textContent=(email?.[0]||'?').toUpperCase();$('presence-avatars').appendChild(el);}
+function removePresenceDot(uid){const el=document.getElementById('pdot-'+uid);if(el)el.remove();}
+
+// ═══════════════════════════════════════════════════════════════════
+// CHAT
+// ═══════════════════════════════════════════════════════════════════
+let chatCollapsed=false;
+function toggleChat(){chatCollapsed=!chatCollapsed;$('chat-panel').classList.toggle('collapsed',chatCollapsed);$('chat-toggle').textContent=chatCollapsed?'▼':'▲';}
+function sendChat(){const text=$('chat-input').value.trim();if(!text)return;wsSend({type:'chat',text});appendChat(userEmail,text,new Date().toISOString());$('chat-input').value='';}
+function appendChat(email,text,ts){const msgs=$('chat-messages');const div=document.createElement('div');div.className='chat-msg';div.innerHTML=`<div class="chat-msg-name">${escHtml(email?.split('@')[0]||'User')}</div><div class="chat-msg-text">${escHtml(text)}</div><div class="chat-msg-time">${(ts||'').slice(11,16)}</div>`;msgs.appendChild(div);msgs.scrollTop=msgs.scrollHeight;if(chatCollapsed)toggleChat();}
+
+// ═══════════════════════════════════════════════════════════════════
+// STARTUP
+// ═══════════════════════════════════════════════════════════════════
+(function init(){
+  const saved=localStorage.getItem('wb_token');
+  if(saved){
+    token=saved;
+    api('GET','/auth/me').then(me=>{userId=me.id;tenantId=me.tenant_id;userRole=me.role;userEmail=me.email;goToDashboard();}).catch(()=>{localStorage.removeItem('wb_token');});
+  }
+})();
+</script>
+</body>
+</html>
